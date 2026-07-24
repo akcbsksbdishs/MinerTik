@@ -1,7 +1,7 @@
 راهنمای فورک و ویرایش پروژه MinerTik
 =====================================
 
-[Keep Alive Status](https://github.com/akcbsksbdishs/MinerTik/actions/workflows/main.yml/badge.svg)
+[https://github.com/akcbsksbdishs/MinerTik/actions/workflows/main.yml/badge.svg]
 
 معرفی
 -------
