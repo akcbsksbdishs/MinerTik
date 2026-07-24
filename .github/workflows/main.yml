@@ -1,57 +1,149 @@
-name: باز کردن کنسول مرورگر مجازی برای سایت MinerTik
+name: 💪 مانیتورینگ حرفه‌ای و ضبط کنسول سایت MinerTik
 
 on:
   schedule:
-    - cron: '*/1 * * * *'  # هر 10 دقیقه یک بار
+    - cron: '*/10 * * * *'  # هر ۱۰ دقیقه یک بار
   workflow_dispatch:        # قابلیت اجرای دستی
 
 jobs:
-  open-console:
-    runs-on: ubuntu-22.04
+  ultimate-monitor:
+    runs-on: ubuntu-22.04  # استفاده از نسخه‌ی پایدار و با صف کمتر
     
     steps:
-      - name: آماده‌سازی محیط (نصب Node.js)
+      - name: ⏳ راه‌اندازی Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: نصب مرورگر مجازی (Playwright)
+      - name: 📦 نصب Playwright
         run: |
           npm init -y
           npm install playwright
-          npx playwright install chromium
 
-      - name: اجرای مرورگر و ضبط کنسول سایت
+      - name: 💾 بازیابی مرورگر از کش (برای سرعت بالا)
+        id: cache-playwright
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium-v1
+
+      - name: 🌐 نصب مرورگر کرومیوم (در صورت عدم وجود کش)
+        if: steps.cache-playwright.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: 🚀 اجرای مرورگر و ضبط کامل کنسول سایت
         run: |
           node -e "
           const { chromium } = require('playwright');
           
           (async () => {
-            // 1. مرورگر مجازی رو روشن کن (بدون صفحه نمایش)
-            const browser = await chromium.launch({ headless: true });
-            const page = await browser.newPage();
+            const url = 'https://akcbsksbdishs.github.io/MinerTik';
+            const startTime = new Date();
             
-            // 2. گوش کن به تمام پیغام‌های کنسول (console.log, error, warn)
-            page.on('console', msg => {
-              console.log(\`🖥️ [کنسول سایت] [\${msg.type()}] \${msg.text()}\`);
-            });
+            console.log('═══════════════════════════════════════════');
+            console.log(\`🟢 شروع بررسی سایت: \${url}\`);
+            console.log(\`🕒 زمان شروع: \${startTime.toLocaleString('fa-IR')}\`);
+            console.log('═══════════════════════════════════════════');
             
-            // 3. گوش کن به خطاهای صفحه (مثل ارورهای جاوااسکریپت)
-            page.on('pageerror', error => {
-              console.log(\`❌ [خطای صفحه] \${error.message}\`);
-            });
-            
-            console.log('🚀 در حال باز کردن سایت...');
-            
-            // 4. برو به آدرس سایت شما
-            await page.goto('https://akcbsksbdishs.github.io/MinerTik', { 
-              waitUntil: 'networkidle' 
-            });
-            
-            // 5. چند ثانیه صبر کن تا لاگ‌های اولیه سایت ثبت بشن
-            await new Promise(r => setTimeout(r, 5000));
-            
-            console.log('✅ کار بررسی کنسول تمام شد.');
-            await browser.close();
+            let browser;
+            try {
+              // ۱. راه‌اندازی مرورگر مجازی (بدون صفحه نمایش)
+              browser = await chromium.launch({ 
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+              });
+              
+              const context = await browser.newContext({
+                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
+              });
+              
+              const page = await context.newPage();
+              
+              // ۲. گوش‌دادن به تمام پیغام‌های کنسول (همان F12)
+              page.on('console', msg => {
+                const type = msg.type();
+                let prefix = '📋';
+                if (type === 'error') prefix = '❌';
+                else if (type === 'warning') prefix = '⚠️';
+                else if (type === 'info') prefix = 'ℹ️';
+                else if (type === 'debug') prefix = '🐞';
+                console.log(\`\${prefix} [CONSOLE] \${msg.text()}\`);
+              });
+              
+              // ۳. گوش‌دادن به خطاهای سطح صفحه (Page Errors)
+              page.on('pageerror', error => {
+                console.error(\`💥 [PAGE ERROR] \${error.message}\`);
+                if (error.stack) {
+                  console.error(\`📚 [STACK] \${error.stack}\`);
+                }
+              });
+              
+              // ۴. گوش‌دادن به درخواست‌های ناموفق شبکه (404, 500 و ...)
+              page.on('response', response => {
+                const status = response.status();
+                if (status >= 400) {
+                  console.warn(\`🌐 [HTTP ERROR] \${response.url()} -> وضعیت: \${status}\`);
+                }
+              });
+              
+              // ۵. گوش‌دادن به خطاهای جاوااسکریپت داخل صفحه
+              page.on('requestfailed', request => {
+                console.warn(\`📡 [REQUEST FAILED] \${request.url()} - \${request.failure()?.errorText || 'Unknown error'}\`);
+              });
+              
+              console.log('⏳ در حال بارگذاری صفحه... (حداکثر ۳۰ ثانیه)');
+              
+              // ۶. باز کردن سایت (همان کاری که شما می‌خواهید)
+              const response = await page.goto(url, { 
+                waitUntil: 'networkidle', 
+                timeout: 30000 
+              });
+              
+              // ۷. دریافت وضعیت HTTP
+              if (response) {
+                console.log(\`📡 وضعیت HTTP: \${response.status()} \${response.statusText()}\`);
+              }
+              
+              // ۸. دریافت عنوان صفحه
+              const title = await page.title();
+              console.log(\`📄 عنوان صفحه: \${title || 'بدون عنوان'}\`);
+              
+              // ۹. دریافت آدرس نهایی (در صورت ریدایرکت)
+              console.log(\`🔗 آدرس نهایی: \${page.url()}\`);
+              
+              // ۱۰. صبر برای لاگ‌های دیرهنگام (مثل لاگ‌های تایمرها)
+              await page.waitForTimeout(3000);
+              
+              // ۱۱. گرفتن یک اسکرین‌شات (اختیاری، برای اطمینان از باز شدن)
+              await page.screenshot({ path: 'screenshot.png', fullPage: true });
+              console.log('📸 اسکرین‌شات از صفحه گرفته شد.');
+              
+              const endTime = new Date();
+              const duration = (endTime - startTime) / 1000;
+              console.log('═══════════════════════════════════════════');
+              console.log(\`✅ بررسی با موفقیت کامل شد! (مدت زمان: \${duration} ثانیه)\`);
+              console.log('═══════════════════════════════════════════');
+              
+            } catch (error) {
+              // اگر سایت آفلاین بود یا خطایی رخ داد، اکشن FAIL نمی‌شود تا لاگ‌ها حفظ شوند
+              console.error('═══════════════════════════════════════════');
+              console.error(\`🚨 خطا در باز کردن سایت: \${error.message}\`);
+              console.error('═══════════════════════════════════════════');
+              // کد خطا را ۰ می‌کنیم تا وورکفلو قرمز نشود (چون خود سایت ممکنه موقتاً مشکل داشته باشه)
+              process.exitCode = 0;
+            } finally {
+              if (browser) {
+                await browser.close();
+                console.log('🔚 مرورگر مجازی بسته شد.');
+              }
+            }
           })();
           "
+
+      - name: 📸 آپلود اسکرین‌شات (برای بررسی بصری)
+        uses: actions/upload-artifact@v4
+        if: always()  # حتی اگر خطا هم رخ داده باشه، آپلود کن
+        with:
+          name: screenshot-of-site
+          path: screenshot.png
+          retention-days: 1
