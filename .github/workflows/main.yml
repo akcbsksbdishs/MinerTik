@@ -1,16 +1,57 @@
-name: Keep Website Alive
+name: باز کردن کنسول مرورگر مجازی برای سایت MinerTik
 
 on:
   schedule:
-    # هر ۱۰ دقیقه یکبار اجرا میشه
-    - cron: '*/1 * * * *'
-  workflow_dispatch: # این خط رو بذارید تا بتونید دستی هم اجراش کنید
+    - cron: '*/1 * * * *'  # هر 10 دقیقه یک بار
+  workflow_dispatch:        # قابلیت اجرای دستی
 
 jobs:
-  ping:
+  open-console:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Ping my website
+      - name: آماده‌سازی محیط (نصب Node.js)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: نصب مرورگر مجازی (Playwright)
         run: |
-          # آدرس سایت خودتون رو اینجا بذارید
-          curl -I -s -o /dev/null -w "✅ سایت با موفقیت چک شد - وضعیت: %{http_code}\n" https://akcbsksbdishs.github.io/MinerTik
+          npm init -y
+          npm install playwright
+          npx playwright install chromium
+
+      - name: اجرای مرورگر و ضبط کنسول سایت
+        run: |
+          node -e "
+          const { chromium } = require('playwright');
+          
+          (async () => {
+            // 1. مرورگر مجازی رو روشن کن (بدون صفحه نمایش)
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage();
+            
+            // 2. گوش کن به تمام پیغام‌های کنسول (console.log, error, warn)
+            page.on('console', msg => {
+              console.log(\`🖥️ [کنسول سایت] [\${msg.type()}] \${msg.text()}\`);
+            });
+            
+            // 3. گوش کن به خطاهای صفحه (مثل ارورهای جاوااسکریپت)
+            page.on('pageerror', error => {
+              console.log(\`❌ [خطای صفحه] \${error.message}\`);
+            });
+            
+            console.log('🚀 در حال باز کردن سایت...');
+            
+            // 4. برو به آدرس سایت شما
+            await page.goto('https://akcbsksbdishs.github.io/MinerTik', { 
+              waitUntil: 'networkidle' 
+            });
+            
+            // 5. چند ثانیه صبر کن تا لاگ‌های اولیه سایت ثبت بشن
+            await new Promise(r => setTimeout(r, 5000));
+            
+            console.log('✅ کار بررسی کنسول تمام شد.');
+            await browser.close();
+          })();
+          "
