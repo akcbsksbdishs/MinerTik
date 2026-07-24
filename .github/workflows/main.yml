@@ -1,0 +1,16 @@
+name: Keep Website Alive
+
+on:
+  schedule:
+    # هر ۱۰ دقیقه یکبار اجرا میشه
+    - cron: '*/1 * * * *'
+  workflow_dispatch: # این خط رو بذارید تا بتونید دستی هم اجراش کنید
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping my website
+        run: |
+          # آدرس سایت خودتون رو اینجا بذارید
+          curl -I -s -o /dev/null -w "✅ سایت با موفقیت چک شد - وضعیت: %{http_code}\n" https://akcbsksbdishs.github.io/MinerTik
